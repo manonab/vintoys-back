@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "CommonJS",
+    "typeRoots": ["node_modules/@types"],
+    "lib": ["ESNext"],
+    "outDir": "./dist",
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "jsx": "react"
+  },
+  "include": ["./app/**/*", ".env", "./database/**/*", "./routes/**/*", "./utils/**/*"],
+  "exclude": ["node_modules", "**/*.test.ts"]
+}
