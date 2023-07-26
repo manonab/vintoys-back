@@ -1,11 +1,12 @@
 import bodyParser from 'body-parser';
 import express from 'express';
 import adsRouter from './routes/ads';
-
+import cors from "cors";
 const app = express();
 const port = 3001;
 
 app.use(bodyParser.json());
+app.use(cors());
 
 app.use(adsRouter);
 
