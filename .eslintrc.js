@@ -3,7 +3,7 @@ module.exports = {
   plugins: ["@typescript-eslint"],
   extends: ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
   rules: {
-    // Add any additional ESLint rules or overrides as needed
+    "@typescript-eslint/no-var-requires": "",
   },
   env: {
     node: true, // Add this line to define the 'module' variable for Node.js environment
