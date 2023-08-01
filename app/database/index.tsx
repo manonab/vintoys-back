@@ -13,12 +13,14 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
-// Test the database connection
-pool.getConnection().then((connection) => {
-  console.log("Connected to database with ID: " + connection.threadId);
-  connection.release();
-}).catch((err) => {
-  console.error("Error connecting to database: " + err.stack);
-});
+pool
+  .getConnection()
+  .then((connection) => {
+    console.log("Connected to database with ID: " + connection.threadId);
+    connection.release();
+  })
+  .catch((err) => {
+    console.error("Error connecting to database: " + err.stack);
+  });
 
 export default pool;

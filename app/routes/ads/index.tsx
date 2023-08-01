@@ -1,38 +1,72 @@
-import pool from "../../database";
-import { Router, Request, Response } from "express";
 import { FieldPacket, RowDataPacket, ResultSetHeader } from "mysql2";
+import { Router, Request, Response } from "express";
+import pool from "../../database";
+import { verifyToken } from "../../middleware/verifyToken";
 
 const adsRouter = Router();
 
-adsRouter.post("/ads", async (req: Request, res: Response) => {
+adsRouter.post("/ads", verifyToken, async (req: Request, res: Response) => {
   try {
-    const { title, description, price, category, images } = req.body;
+    const {
+      title,
+      description,
+      price,
+      category,
+      images,
+      location,
+      seller_email,
+      seller_name,
+      seller_phone,
+      is_vintage,
+      brand,
+    } = req.body;
 
-    if (!title || !description || !price || !category) {
+    if (
+      !title ||
+      !description ||
+      !price ||
+      !category ||
+      !location ||
+      !seller_email ||
+      !seller_name ||
+      !seller_phone ||
+      !is_vintage ||
+      !brand
+    ) {
       return res.status(400).json({ message: "Please provide all the required values." });
     }
 
-    // Get the thumbnail URL from the first image, or use the default URL if no images are provided
     const thumbnailUrl =
       images && images.length > 0 ? images[0].url : "url_de_l_image_par_defaut.jpg";
 
-    const [adResult]: [ResultSetHeader, FieldPacket[]] = await pool.execute(
-      "INSERT INTO ads (title, description, price, category, thumbnail_url) VALUES (?, ?, ?, ?, ?)",
-      [title, description, price, category, thumbnailUrl],
-    );
+    const query = `
+      INSERT INTO ads (title, description, price, category, thumbnail_url, location, seller_email, seller_name, seller_phone, is_vintage, brand, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    `;
 
-    const connection = await pool.getConnection();
+    const [adResult]: [ResultSetHeader, FieldPacket[]] = await pool.execute(query, [
+      title,
+      description,
+      price,
+      category,
+      thumbnailUrl,
+      location,
+      seller_email,
+      seller_name,
+      seller_phone,
+      is_vintage,
+      brand,
+    ]);
+
     const adId = adResult.insertId;
 
     if (images && Array.isArray(images)) {
       const imageQuery = "INSERT INTO images (ad_id, url) VALUES (?, ?)";
       for (const imageUrl of images) {
-        const imageValues = [adId, imageUrl.url]; // Use imageUrl.url instead of imageUrl
-        await connection.query(imageQuery, imageValues);
+        const imageValues = [adId, imageUrl.url];
+        await pool.execute(imageQuery, imageValues);
       }
     }
-
-    connection.release();
 
     res.status(201).json({ message: "Ad created successfully." });
   } catch (error) {
@@ -55,7 +89,12 @@ adsRouter.get("/ads", async (_req: Request, res: Response) => {
     // Type assertion to ensure adsWithThumbnails is of type RowDataPacket[]
     const ads = (adsWithThumbnails as RowDataPacket[]).map((ad) => ({
       id: ad.id,
-      title: ad.title,
+      is_vintage: ad.is_vintage,
+      seller_phone: ad.seller_phone,
+      seller_name: ad.seller_name,
+      brand: ad.brand,
+      location: ad.location,
+      seller_email: ad.seller_email,
       description: ad.description,
       price: ad.price,
       state: ad.state,
@@ -76,7 +115,6 @@ adsRouter.get("/ads/:id", async (req: Request, res: Response) => {
   const adId = req.params.id;
 
   try {
-    // Fetch ad details from the database
     const adQuery = "SELECT * FROM ads WHERE id = ?";
     const connection = await pool.getConnection();
     const [adResults] = (await connection.query(adQuery, [adId])) as RowDataPacket[];
@@ -88,7 +126,6 @@ adsRouter.get("/ads/:id", async (req: Request, res: Response) => {
 
     const ad = adResults[0];
 
-    // Fetch images associated with the ad from the database
     const imageQuery = "SELECT * FROM images WHERE ad_id = ?";
     const [imageResults] = (await connection.query(imageQuery, [
       adId,

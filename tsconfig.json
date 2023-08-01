@@ -15,6 +15,14 @@
     "baseUrl": ".",
     "jsx": "react"
   },
-  "include": ["./app/**/*", ".env", "./database/**/*", "./routes/**/*", "./utils/**/*"],
+  "include": [
+    "./app/**/*",
+    ".env",
+    "./database/**/*",
+    "./routes/**/*",
+    "./utils/**/*",
+    "./middleware/**/*",
+    "./controllers/**/*"
+  ],
   "exclude": ["node_modules", "**/*.test.ts"]
 }
