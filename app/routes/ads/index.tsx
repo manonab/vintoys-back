@@ -7,7 +7,7 @@ const adsRouter = Router();
 
 adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) => {
   try {
-    const user_id = req.user?.user_id;
+    const seller_id = req.user?.user_id;
     const {
       title,
       description,
@@ -15,10 +15,9 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
       category,
       images,
       location,
-      seller_email,
-      seller_name,
-      seller_phone,
-      is_vintage,
+      status,
+      state,
+      sub_category,
       brand,
     } = req.body;
 
@@ -28,10 +27,9 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
       !price ||
       !category ||
       !location ||
-      !seller_email ||
-      !seller_name ||
-      !seller_phone ||
-      !is_vintage ||
+      !status ||
+      !state ||
+      !sub_category ||
       !brand
     ) {
       return res.status(400).json({ message: "Please provide all the required values." });
@@ -41,22 +39,21 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
       images && images.length > 0 ? images[0].url : "url_de_l_image_par_defaut.jpg";
 
     const query = `
-      INSERT INTO ads (user_id,title, description, price, category, thumbnail_url, location, seller_email, seller_name, seller_phone, is_vintage, brand, updated_at)
-      VALUES (?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      INSERT INTO ads (seller_id, title, description, price, category, thumbnail_url, location, status, state, sub_category, brand, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `;
 
     const [adResult]: [ResultSetHeader, FieldPacket[]] = await pool.execute(query, [
-      user_id,
+      seller_id,
       title,
       description,
       price,
       category,
       thumbnailUrl,
       location,
-      seller_email,
-      seller_name,
-      seller_phone,
-      is_vintage,
+      status,
+      state,
+      sub_category,
       brand,
     ]);
 
@@ -80,33 +77,146 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
 adsRouter.get("/ads", async (req: Request, res: Response) => {
   try {
     const query = `
-      SELECT ads.*, images.url as thumbnail_url
-      FROM ads
-      LEFT JOIN images ON ads.id = images.ad_id
+    SELECT ads.*, images.url as thumbnail_url, users.username, users.profile_photo
+    FROM ads
+    LEFT JOIN images ON ads.id = images.ad_id
+    LEFT JOIN users ON ads.seller_id = users.user_id
     `;
     const connection = await pool.getConnection();
     const [adsWithThumbnails] = await connection.query(query);
     connection.release();
 
-    // Type assertion to ensure adsWithThumbnails is of type RowDataPacket[]
     const ads = (adsWithThumbnails as RowDataPacket[]).map((ad) => ({
       id: ad.id,
-      is_vintage: ad.is_vintage,
-      seller_phone: ad.seller_phone,
-      seller_name: ad.seller_name,
+      title: ad.title,
       brand: ad.brand,
-      user_id: ad.user_id,
+      seller_id: ad.seller_id,
+      seller_username: ad.username,
+      seller_profile_photo: ad.profile_photo,
       location: ad.location,
-      seller_email: ad.seller_email,
       description: ad.description,
       price: ad.price,
       state: ad.state,
       created_at: ad.created_at,
       category: ad.category,
       time_ago: getTimeAgo(ad.created_at),
-      thumbnail_url: ad.thumbnail_url || "url_de_l_image_par_defaut.jpg", // Use the default URL if thumbnail_url is null
+      thumbnail_url: ad.thumbnail_url || "url_de_l_image_par_defaut.jpg",
     }));
 
+    console.log(ads);
+    res.status(200).json(ads);
+  } catch (error) {
+    console.error("Error while fetching ads:", error);
+    res.status(500).json({ message: "Server error while fetching ads." });
+  }
+});
+
+adsRouter.get("/ads/children", async (req: Request, res: Response) => {
+  try {
+    const query = `
+    SELECT ads.*, images.url as thumbnail_url, users.username, users.profile_photo
+    FROM ads
+    LEFT JOIN images ON ads.id = images.ad_id
+    LEFT JOIN users ON ads.seller_id = users.user_id
+    WHERE ads.category = 2
+    `;
+    const connection = await pool.getConnection();
+    const [adsWithThumbnails] = await connection.query(query);
+    connection.release();
+
+    const ads = (adsWithThumbnails as RowDataPacket[]).map((ad) => ({
+      id: ad.id,
+      title: ad.title,
+      brand: ad.brand,
+      seller_id: ad.seller_id,
+      seller_username: ad.username,
+      seller_profile_photo: ad.profile_photo,
+      location: ad.location,
+      description: ad.description,
+      price: ad.price,
+      state: ad.state,
+      created_at: ad.created_at,
+      category: ad.category,
+      time_ago: getTimeAgo(ad.created_at),
+      thumbnail_url: ad.thumbnail_url || "url_de_l_image_par_defaut.jpg",
+    }));
+
+    console.log(ads);
+    res.status(200).json(ads);
+  } catch (error) {
+    console.error("Error while fetching ads:", error);
+    res.status(500).json({ message: "Server error while fetching ads." });
+  }
+});
+adsRouter.get("/ads/adult", async (req: Request, res: Response) => {
+  try {
+    const query = `
+    SELECT ads.*, images.url as thumbnail_url, users.username, users.profile_photo
+    FROM ads
+    LEFT JOIN images ON ads.id = images.ad_id
+    LEFT JOIN users ON ads.seller_id = users.user_id
+    WHERE ads.category = 1
+    `;
+    const connection = await pool.getConnection();
+    const [adsWithThumbnails] = await connection.query(query);
+    connection.release();
+
+    const ads = (adsWithThumbnails as RowDataPacket[]).map((ad) => ({
+      id: ad.id,
+      title: ad.title,
+      brand: ad.brand,
+      seller_id: ad.seller_id,
+      seller_username: ad.username,
+      seller_profile_photo: ad.profile_photo,
+      location: ad.location,
+      description: ad.description,
+      price: ad.price,
+      state: ad.state,
+      created_at: ad.created_at,
+      category: ad.category,
+      time_ago: getTimeAgo(ad.created_at),
+      thumbnail_url: ad.thumbnail_url || "url_de_l_image_par_defaut.jpg",
+    }));
+
+    console.log(ads);
+    res.status(200).json(ads);
+  } catch (error) {
+    console.error("Error while fetching ads:", error);
+    res.status(500).json({ message: "Server error while fetching ads." });
+  }
+});
+
+adsRouter.get("/ads/vintage", async (req: Request, res: Response) => {
+  try {
+    const query = `
+    SELECT ads.*, images.url as thumbnail_url, users.username, users.profile_photo
+    FROM ads
+    LEFT JOIN images ON ads.id = images.ad_id
+    LEFT JOIN users ON ads.seller_id = users.user_id
+    WHERE ads.category = 3
+    `;
+    const connection = await pool.getConnection();
+    const [adsWithThumbnails] = await connection.query(query);
+    connection.release();
+
+    const ads = (adsWithThumbnails as RowDataPacket[]).map((ad) => ({
+      id: ad.id,
+      title: ad.title,
+      brand: ad.brand,
+      seller_id: ad.seller_id,
+      seller_username: ad.username,
+      seller_profile_photo: ad.profile_photo,
+      location: ad.location,
+      description: ad.description,
+      price: ad.price,
+      state: ad.state,
+      created_at: ad.created_at,
+      category: ad.category,
+      time_ago: getTimeAgo(ad.created_at),
+      thumbnail_url: ad.thumbnail_url || "url_de_l_image_par_defaut.jpg",
+    }));
+
+    console.log(ads);
     res.status(200).json(ads);
   } catch (error) {
     console.error("Error while fetching ads:", error);
@@ -128,7 +238,6 @@ adsRouter.get("/my_ads", verifyToken, async (req: CustomRequest, res: Response) 
     const connection = await pool.getConnection();
     const [adsWithThumbnails] = await connection.query(query, [user_id]);
     connection.release();
-
     const ads = (adsWithThumbnails as RowDataPacket[]).map((ad) => ({
       id: ad.id,
       is_vintage: ad.is_vintage,
@@ -153,6 +262,7 @@ adsRouter.get("/my_ads", verifyToken, async (req: CustomRequest, res: Response) 
     res.status(500).json({ message: "Server error while fetching user ads." });
   }
 });
+
 adsRouter.get("/ads/:id", async (req: Request, res: Response) => {
   const adId = req.params.id;
 
@@ -220,7 +330,6 @@ adsRouter.put(
           .json({ message: "Please provide all the required values." });
       }
 
-      // Mettre à jour l'annonce dans la base de données
       const thumbnailUrl =
         images && images.length > 0 ? images[0].url : "url_de_l_image_par_defaut.jpg";
       const updateQuery = `
@@ -272,11 +381,6 @@ adsRouter.delete("/ads/:id", verifyToken, async (req: Request, res: Response) =>
     if (ads.length === 0) {
       return res.status(404).json({ message: "Ad not found" });
     }
-
-    // Vérifiez si l'utilisateur connecté est le propriétaire de l'annonce (ou a les autorisations appropriées pour supprimer l'annonce)
-    // Vous pouvez implémenter la logique pour vérifier cela en fonction de votre système d'authentification et des autorisations des utilisateurs
-
-    // Supprimez l'annonce de la base de données
     await pool.execute("DELETE FROM ads WHERE id = ?", [adId]);
 
     res.status(200).json({ message: "Ad deleted successfully" });
@@ -285,6 +389,7 @@ adsRouter.delete("/ads/:id", verifyToken, async (req: Request, res: Response) =>
     res.status(500).json({ message: "Error deleting the ad" });
   }
 });
+
 function getTimeAgo(timestamp: string): string {
   const currentTime = Date.now();
   const adTime = Date.parse(timestamp);

@@ -20,14 +20,20 @@ authRouter.post("/signin", async (req: Request, res: Response) => {
       const user = result[0];
       const passwordMatch = await bcrypt.compare(password, user.password);
       if (passwordMatch) {
-        const token = jwt.sign({ user_id: user.user_id }, "votre_secret_ici", {
-          expiresIn: "1h",
+        const token = jwt.sign(
+          { user_id: user.user_id, user_name: user.username },
+          "default_secret",
+          {
+            expiresIn: "1h",
+          },
+        );
+        res.cookie("user_token", token, {
+          httpOnly: true,
+          expires: new Date(Date.now() + 3600000),
         });
-        res.status(200).json({
-          message: "Sign in successful",
-          user_id: user.user_id,
+        res.json({
           user_token: token,
-          user_name: user.username,
+          message: "Sign in successful",
         });
       } else {
         res.status(401).json({ message: "Invalid email or password" });
@@ -51,21 +57,21 @@ authRouter.get("/protected_route", verifyToken, (req: CustomRequest, res: Respon
 
 authRouter.post("/sign_up", async (req: Request, res: Response) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, street, postalCode, city } = req.body;
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insert the new user into the database
     const [userResult]: [ResultSetHeader, FieldPacket[]] = await pool.execute(
-      "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
-      [username, email, hashedPassword],
+      "INSERT INTO users (username, email, password, street, postalCode, city) VALUES (?, ?, ?, ?, ?, ?)",
+      [username, email, hashedPassword, street, postalCode, city],
     );
 
     const accessToken = jwt.sign(
       { user_id: userResult.insertId },
-      process.env.ACCESS_TOKEN_SECRET || "default_secret", // Utiliser une valeur par défaut si ACCESS_TOKEN_SECRET n'est pas défini
+      process.env.ACCESS_TOKEN_SECRET || "default_secret",
     );
-    res.json({ user_id: userResult.insertId, accessToken });
+    res.json({ accessToken });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });
