@@ -11,26 +11,27 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
     const {
       title,
       description,
-      price,
-      category,
-      images,
-      location,
-      status,
-      state,
       sub_category,
+      age_range,
+      category,
+      price,
       brand,
+      location,
+      state,
+      status,
+      images,
     } = req.body;
-
     if (
       !title ||
       !description ||
-      !price ||
-      !category ||
-      !location ||
-      !status ||
-      !state ||
       !sub_category ||
-      !brand
+      !age_range ||
+      !category ||
+      !price ||
+      !brand ||
+      !location ||
+      !state ||
+      !status
     ) {
       return res.status(400).json({ message: "Please provide all the required values." });
     }
@@ -39,26 +40,40 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
       images && images.length > 0 ? images[0].url : "url_de_l_image_par_defaut.jpg";
 
     const query = `
-      INSERT INTO ads (seller_id, title, description, price, category, thumbnail_url, location, status, state, sub_category, brand, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      INSERT INTO ads (seller_id, title, description, sub_category, age_range, category, price, brand, location, state, status, thumbnail_url,updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `;
-
-    const [adResult]: [ResultSetHeader, FieldPacket[]] = await pool.execute(query, [
+    console.log("Values:", {
       seller_id,
       title,
       description,
       price,
       category,
-      thumbnailUrl,
+      images,
       location,
       status,
       state,
       sub_category,
+      age_range,
       brand,
+    });
+
+    const [adResult]: [ResultSetHeader, FieldPacket[]] = await pool.execute(query, [
+      seller_id,
+      title,
+      description,
+      category,
+      age_range,
+      sub_category,
+      price,
+      brand,
+      location,
+      state,
+      status,
+      thumbnailUrl,
     ]);
 
     const adId = adResult.insertId;
-
     if (images && Array.isArray(images)) {
       const imageQuery = "INSERT INTO images (ad_id, url) VALUES (?, ?)";
       for (const imageUrl of images) {
@@ -91,8 +106,8 @@ adsRouter.get("/ads", async (req: Request, res: Response) => {
       title: ad.title,
       brand: ad.brand,
       seller_id: ad.seller_id,
-      seller_username: ad.username,
-      seller_profile_photo: ad.profile_photo,
+      username: ad.username,
+      profile_photo: ad.profile_photo,
       location: ad.location,
       description: ad.description,
       price: ad.price,
@@ -148,6 +163,7 @@ adsRouter.get("/ads/children", async (req: Request, res: Response) => {
     res.status(500).json({ message: "Server error while fetching ads." });
   }
 });
+
 adsRouter.get("/ads/adult", async (req: Request, res: Response) => {
   try {
     const query = `
@@ -226,29 +242,26 @@ adsRouter.get("/ads/vintage", async (req: Request, res: Response) => {
 
 adsRouter.get("/my_ads", verifyToken, async (req: CustomRequest, res: Response) => {
   try {
-    const user_id = req.user?.user_id;
+    const seller_id = req.user?.user_id;
 
     const query = `
       SELECT ads.*, images.url as thumbnail_url
       FROM ads
       LEFT JOIN images ON ads.id = images.ad_id
-      WHERE ads.user_id = ?
+      WHERE ads.seller_id = ?
     `;
 
     const connection = await pool.getConnection();
-    const [adsWithThumbnails] = await connection.query(query, [user_id]);
+    const [adsWithThumbnails] = await connection.query(query, [seller_id]);
     connection.release();
     const ads = (adsWithThumbnails as RowDataPacket[]).map((ad) => ({
       id: ad.id,
-      is_vintage: ad.is_vintage,
-      seller_phone: ad.seller_phone,
-      seller_name: ad.seller_name,
+      seller_id: ad.seller_id,
       brand: ad.brand,
-      user_id: ad.user_id,
       location: ad.location,
-      seller_email: ad.seller_email,
       description: ad.description,
       price: ad.price,
+      title: ad.title,
       state: ad.state,
       created_at: ad.created_at,
       category: ad.category,
@@ -267,7 +280,9 @@ adsRouter.get("/ads/:id", async (req: Request, res: Response) => {
   const adId = req.params.id;
 
   try {
-    const adQuery = "SELECT * FROM ads WHERE id = ?";
+    const adQuery = `SELECT ads.*, users.username, users.profile_photo FROM ads 
+      LEFT JOIN users ON ads.seller_id = users.user_id
+      WHERE ads.id = ?`; // Ajout de "WHERE ads.id = ?" pour filtrer par l'ID de l'annonce
     const connection = await pool.getConnection();
     const [adResults] = (await connection.query(adQuery, [adId])) as RowDataPacket[];
     connection.release();
