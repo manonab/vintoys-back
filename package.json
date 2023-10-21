@@ -2,13 +2,13 @@
   "name": "vintoys-back",
   "version": "1.0.0",
   "description": "",
-  "main": "./app/index.ts",
+  "main": "app/index.ts",
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.+(js|json|ts|tsx)\"",
-    "start": "node index.ts",
-    "build": "tsc"
+    "start": "npx index.ts",
+    "build": "npx ts-node app/index.ts"
   },
   "author": "",
   "license": "ISC",
