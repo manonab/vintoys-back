@@ -2,10 +2,34 @@ import { FieldPacket, RowDataPacket, ResultSetHeader } from "mysql2";
 import { Router, Request, Response } from "express";
 import pool from "../../database";
 import { CustomRequest, verifyToken } from "../../middleware/verifyToken";
+import { awsConfig } from "../../utils/aws";
+import * as AWS from '@aws-sdk/client-s3';
+import multerS3 from 'multer-s3';
+import multer from 'multer';
+
+const s3 = new AWS.S3(awsConfig);
 
 const adsRouter = Router();
 
-adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) => {
+const upload = multer({
+  storage: multerS3({
+    s3: s3,
+    bucket: (req: Express.Request, file: Express.Multer.File, cb) => {
+      const dynamicBucketName: string = `${process.env.S3_BUCKET_NAME}`;
+      cb(null, dynamicBucketName);
+    },
+    acl: "public-read",
+    contentType: multerS3.AUTO_CONTENT_TYPE,
+    key: (req: Request, file: Express.Multer.File, cb) => {
+      cb(null, file.originalname);
+    }
+  })
+});
+
+
+adsRouter.post("/ads", verifyToken, upload.array('file', 10), async (req: CustomRequest, res: Response) => {
+  const uploadedFiles = req.files as Express.Multer.File[];
+
   try {
     const seller_id = req.user?.user_id;
     const {
@@ -36,8 +60,10 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
       return res.status(400).json({ message: "Please provide all the required values." });
     }
 
-    const thumbnailUrl =
-      images && images.length > 0 ? images[0].url : "url_de_l_image_par_defaut.jpg";
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "Please provide at least one image." });
+    }
+    const thumbnailUrl = uploadedFiles;
 
     const query = `
       INSERT INTO ads (seller_id, title, description, sub_category, age_range, category, price, brand, location, state, status, thumbnail_url,updated_at)
@@ -60,14 +86,14 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
     ]);
 
     const adId = adResult.insertId;
+
     if (images && Array.isArray(images)) {
       const imageQuery = "INSERT INTO images (ad_id, url) VALUES (?, ?)";
-      for (const imageUrl of images) {
-        const imageValues = [adId, imageUrl.url];
+      for (const image of images) {
+        const imageValues = [adId, image.url];
         await pool.execute(imageQuery, imageValues);
       }
-    }
-
+    };
     res.status(201).json({ message: "Ad created successfully." });
   } catch (error) {
     console.error(error);
@@ -101,10 +127,9 @@ adsRouter.get("/ads", async (req: Request, res: Response) => {
       created_at: ad.created_at,
       category: ad.category,
       time_ago: getTimeAgo(ad.created_at),
-      thumbnail_url: ad.thumbnail_url || "url_de_l_image_par_defaut.jpg",
+      thumbnail_url: ad.thumbnail_url,
     }));
 
-    console.log(ads);
     res.status(200).json(ads);
   } catch (error) {
     console.error("Error while fetching ads:", error);
