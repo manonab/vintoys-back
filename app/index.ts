@@ -14,7 +14,6 @@ app.use(adsRouter);
 app.use(authRouter);
 app.use(userRouter);
 
-// Start the server
 app.listen(port, () => {
   console.log(`Server is running on ${port}`);
 });

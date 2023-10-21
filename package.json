@@ -7,7 +7,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.+(js|json|ts|tsx)\"",
-    "start": "npx index.ts",
+    "start": "npx ts-node app/index.ts",
     "build": "npx ts-node app/index.ts"
   },
   "author": "",
