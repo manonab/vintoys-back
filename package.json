@@ -2,7 +2,7 @@
   "name": "vintoys-back",
   "version": "1.0.0",
   "description": "",
-  "main": "app/index.ts",
+  "main": "dist/app/index.js",
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
