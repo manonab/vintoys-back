@@ -61,9 +61,9 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
 
     const adId = adResult.insertId;
     if (images && Array.isArray(images)) {
-      const imageQuery = "INSERT INTO images (ad_id, data) VALUES (?, ?)";
-      for (const image of images) {
-        const imageValues = [adId, image.data];
+      const imageQuery = "INSERT INTO images (ad_id, url) VALUES (?, ?)";
+      for (const imageUrl of images) {
+        const imageValues = [adId, imageUrl.url];
         await pool.execute(imageQuery, imageValues);
       }
     }
@@ -78,7 +78,7 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
 adsRouter.get("/ads", async (req: Request, res: Response) => {
   try {
     const query = `
-    SELECT ads.*, images.data as image_data, users.username, users.profile_photo
+    SELECT ads.*, images.url as thumbnail_url, users.username, users.profile_photo
     FROM ads
     LEFT JOIN images ON ads.id = images.ad_id
     LEFT JOIN users ON ads.seller_id = users.user_id
@@ -101,9 +101,10 @@ adsRouter.get("/ads", async (req: Request, res: Response) => {
       created_at: ad.created_at,
       category: ad.category,
       time_ago: getTimeAgo(ad.created_at),
-      thumbnail_url: ad.image_data ? `data:image/jpeg;base64,${ad.image_data.toString("base64")}` : "url_de_l_image_par_defaut.jpg",
+      thumbnail_url: ad.thumbnail_url || "url_de_l_image_par_defaut.jpg",
     }));
 
+    console.log(ads);
     res.status(200).json(ads);
   } catch (error) {
     console.error("Error while fetching ads:", error);
