@@ -2,7 +2,7 @@ import { CustomRequest, verifyToken } from "../../middleware/verifyToken";
 import { Router, Response } from "express";
 import { FieldPacket, RowDataPacket } from "mysql2";
 import pool from "../../database";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 const userRouter = Router();
 

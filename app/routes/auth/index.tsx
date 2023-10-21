@@ -1,7 +1,7 @@
 import express, { Request, Response, Router } from "express";
 import pool from "../../database";
 import { FieldPacket, RowDataPacket, ResultSetHeader } from "mysql2";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { CustomRequest, verifyToken } from "../../middleware/verifyToken";
 require("dotenv").config();
