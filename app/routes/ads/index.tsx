@@ -27,9 +27,7 @@ const upload = multer({
 });
 
 
-adsRouter.post("/ads", verifyToken, upload.array('file', 10), async (req: CustomRequest, res: Response) => {
-  const uploadedFiles = req.files as Express.Multer.File[];
-
+adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) => {
   try {
     const seller_id = req.user?.user_id;
     const {
@@ -60,11 +58,8 @@ adsRouter.post("/ads", verifyToken, upload.array('file', 10), async (req: Custom
       return res.status(400).json({ message: "Please provide all the required values." });
     }
 
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ message: "Please provide at least one image." });
-    }
-    const thumbnailUrl = uploadedFiles;
-
+    const thumbnailUrl =
+      images && images.length > 0 ? images[0].url : "url_de_l_image_par_defaut.jpg";
     const query = `
       INSERT INTO ads (seller_id, title, description, sub_category, age_range, category, price, brand, location, state, status, thumbnail_url,updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
@@ -86,14 +81,13 @@ adsRouter.post("/ads", verifyToken, upload.array('file', 10), async (req: Custom
     ]);
 
     const adId = adResult.insertId;
-
     if (images && Array.isArray(images)) {
-      const imageQuery = "INSERT INTO images (ad_id, url) VALUES (?, ?)";
+      const imageQuery = "INSERT INTO images (ad_id, data) VALUES (?, ?)";
       for (const image of images) {
-        const imageValues = [adId, image.url];
+        const imageValues = [adId, image.data];
         await pool.execute(imageQuery, imageValues);
       }
-    };
+    }
     res.status(201).json({ message: "Ad created successfully." });
   } catch (error) {
     console.error(error);
