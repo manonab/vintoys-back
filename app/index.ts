@@ -21,6 +21,7 @@ app.use((req, res, next) => {
 });
 app.use(cors());
 
+app.use(adsRouter);
 app.use(authRouter);
 app.use(userRouter);
 
