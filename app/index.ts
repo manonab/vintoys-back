@@ -18,6 +18,6 @@ app.listen(port, () => {
 
 app.use(
   cors({
-    origin: "https://flourishing-nasturtium-1e40fd.netlify.app",
+    origin: "https://benevolent-pixie-c8f6ac.netlify.app/",
   }),
 );
