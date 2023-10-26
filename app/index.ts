@@ -21,9 +21,10 @@ app.use((req, res, next) => {
 });
 app.use(cors());
 
-app.use(adsRouter);
 app.use(authRouter);
 app.use(userRouter);
+
+app.use(express.json({ limit: "50mb" }));
 
 app.listen(port, () => {
   console.log(`Server is running on ${port}`);
