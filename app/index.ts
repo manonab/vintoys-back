@@ -24,8 +24,6 @@ app.use(cors());
 app.use(authRouter);
 app.use(userRouter);
 
-app.use(express.json({ limit: "50mb" }));
-
 app.listen(port, () => {
   console.log(`Server is running on ${port}`);
 });
