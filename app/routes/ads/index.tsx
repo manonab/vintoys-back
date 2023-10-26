@@ -40,6 +40,7 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
       return res.status(400).json({ message: "Please provide all the required values." });
     }
     const thumbnailUrl = "url_de_l_image_par_defaut.jpg";
+
     const query = `
       INSERT INTO ads (seller_id, title, description, sub_category, age_range, category, price, brand, location, state, status, thumbnail_url, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
