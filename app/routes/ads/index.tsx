@@ -3,28 +3,11 @@ import { Router, Request, Response } from "express";
 import pool from "../../database";
 import { CustomRequest, verifyToken } from "../../middleware/verifyToken";
 import { awsConfig } from "../../utils/aws";
-import * as AWS from '@aws-sdk/client-s3';
-import multerS3 from 'multer-s3';
-import multer from 'multer';
+import * as AWS from 'aws-sdk';
 
 const s3 = new AWS.S3(awsConfig);
 
 const adsRouter = Router();
-
-const upload = multer({
-  storage: multerS3({
-    s3: s3,
-    bucket: (req: Express.Request, file: Express.Multer.File, cb) => {
-      const dynamicBucketName: string = `${process.env.S3_BUCKET_NAME}`;
-      cb(null, dynamicBucketName);
-    },
-    acl: "public-read",
-    contentType: multerS3.AUTO_CONTENT_TYPE,
-    key: (req: Request, file: Express.Multer.File, cb) => {
-      cb(null, file.originalname);
-    }
-  })
-});
 
 
 adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) => {
@@ -57,11 +40,9 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
     ) {
       return res.status(400).json({ message: "Please provide all the required values." });
     }
-
-    const thumbnailUrl =
-      images && images.length > 0 ? images[0].url : "url_de_l_image_par_defaut.jpg";
+    const thumbnailUrl = "url_de_l_image_par_defaut.jpg";
     const query = `
-      INSERT INTO ads (seller_id, title, description, sub_category, age_range, category, price, brand, location, state, status, thumbnail_url,updated_at)
+      INSERT INTO ads (seller_id, title, description, sub_category, age_range, category, price, brand, location, state, status, thumbnail_url, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `;
 
@@ -81,11 +62,30 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
     ]);
 
     const adId = adResult.insertId;
+    const uploadedImageUrls: string[] = [];
     if (images && Array.isArray(images)) {
       const imageQuery = "INSERT INTO images (ad_id, data) VALUES (?, ?)";
       for (const image of images) {
-        const imageValues = [adId, image.data];
-        await pool.execute(imageQuery, imageValues);
+        const base64Data = image.base64.replace(/^data:image\/[a-zA-Z]+;base64,/, "");
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        const uniqueFileName = `${adId}-${image.name}`;
+        const params = {
+          Bucket: process.env.S3_BUCKET_NAME || "",
+          Key: `images/${uniqueFileName}`,
+          Body: imageBuffer,
+          ACL: 'public-read',
+        };
+        const uploadResult = await s3.upload(params).promise();
+        if (uploadResult.Location) {
+          uploadedImageUrls.push(uploadResult.Location);
+
+          const imageQuery = "INSERT INTO images (ad_id, image_url) VALUES (?, ?)";
+          await pool.execute(imageQuery, [adId, uploadResult.Location]);
+        }
+      }
+      if (uploadedImageUrls.length > 0) {
+        const updateThumbnailQuery = "UPDATE ads SET thumbnail_url = ? WHERE id = ?";
+        await pool.execute(updateThumbnailQuery, [uploadedImageUrls[0], adId]);
       }
     }
     res.status(201).json({ message: "Ad created successfully." });
