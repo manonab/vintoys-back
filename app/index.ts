@@ -16,3 +16,9 @@ app.use(userRouter);
 app.listen(port, () => {
   console.log(`Server is running on ${port}`);
 });
+
+app.use(
+  cors({
+    origin: "https://flourishing-nasturtium-1e40fd.netlify.app",
+  }),
+);
