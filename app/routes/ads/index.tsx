@@ -9,7 +9,6 @@ const s3 = new AWS.S3(awsConfig);
 
 const adsRouter = Router();
 
-
 adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) => {
   try {
     const seller_id = req.user?.user_id;
@@ -63,8 +62,8 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
 
     const adId = adResult.insertId;
     const uploadedImageUrls: string[] = [];
-    if (images && Array.isArray(images)) {
-      const imageQuery = "INSERT INTO images (ad_id, data) VALUES (?, ?)";
+
+    const uploadImages = async () => {
       for (const image of images) {
         const base64Data = image.base64.replace(/^data:image\/[a-zA-Z]+;base64,/, "");
         const imageBuffer = Buffer.from(base64Data, 'base64');
@@ -75,19 +74,28 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
           Body: imageBuffer,
           ACL: 'public-read',
         };
-        const uploadResult = await s3.upload(params).promise();
-        if (uploadResult.Location) {
-          uploadedImageUrls.push(uploadResult.Location);
 
-          const imageQuery = "INSERT INTO images (ad_id, image_url) VALUES (?, ?)";
-          await pool.execute(imageQuery, [adId, uploadResult.Location]);
+        try {
+          const uploadResult = await s3.upload(params).promise();
+          if (uploadResult.Location) {
+            uploadedImageUrls.push(uploadResult.Location);
+
+            const imageQuery = "INSERT INTO images (ad_id, image_url) VALUES (?, ?)";
+            await pool.execute(imageQuery, [adId, uploadResult.Location]);
+          }
+        } catch (error) {
+          console.error("Error uploading image:", error);
         }
       }
-      if (uploadedImageUrls.length > 0) {
-        const updateThumbnailQuery = "UPDATE ads SET thumbnail_url = ? WHERE id = ?";
-        await pool.execute(updateThumbnailQuery, [uploadedImageUrls[0], adId]);
-      }
+    };
+
+    await uploadImages();
+
+    if (uploadedImageUrls.length > 0) {
+      const updateThumbnailQuery = "UPDATE ads SET thumbnail_url = ? WHERE id = ?";
+      await pool.execute(updateThumbnailQuery, [uploadedImageUrls[0], adId]);
     }
+
     res.status(201).json({ message: "Ad created successfully." });
   } catch (error) {
     console.error(error);
