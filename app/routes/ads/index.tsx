@@ -2,30 +2,18 @@ import { FieldPacket, RowDataPacket, ResultSetHeader } from "mysql2";
 import { Router, Request, Response } from "express";
 import pool from "../../database";
 import { CustomRequest, verifyToken } from "../../middleware/verifyToken";
-import { awsConfig } from "../../utils/aws";
-import * as AWS from '@aws-sdk/client-s3';
-import multerS3 from 'multer-s3';
-import multer from 'multer';
-
-const s3 = new AWS.S3(awsConfig);
+import * as AWS from 'aws-sdk';
+import { v4 as uuidv4 } from 'uuid';
 
 const adsRouter = Router();
 
-const upload = multer({
-  storage: multerS3({
-    s3: s3,
-    bucket: (req: Express.Request, file: Express.Multer.File, cb) => {
-      const dynamicBucketName: string = `${process.env.S3_BUCKET_NAME}`;
-      cb(null, dynamicBucketName);
-    },
-    acl: "public-read",
-    contentType: multerS3.AUTO_CONTENT_TYPE,
-    key: (req: Request, file: Express.Multer.File, cb) => {
-      cb(null, file.originalname);
-    }
-  })
+AWS.config.update({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
 });
 
+const s3 = new AWS.S3();
 
 adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) => {
   try {
@@ -41,8 +29,8 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
       location,
       state,
       status,
-      images,
     } = req.body;
+
     if (
       !title ||
       !description ||
@@ -58,20 +46,21 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
       return res.status(400).json({ message: "Please provide all the required values." });
     }
 
-    const thumbnailUrl =
-      images && images.length > 0 ? images[0].url : "url_de_l_image_par_defaut.jpg";
+    // Insérez l'annonce dans la base de données
     const query = `
-      INSERT INTO ads (seller_id, title, description, sub_category, age_range, category, price, brand, location, state, status, thumbnail_url,updated_at)
+      INSERT INTO ads (seller_id, title, description, sub_category, age_range, category, price, brand, location, state, status, thumbnail_url, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `;
+
+    const thumbnailUrl = "image.jpeg";
 
     const [adResult]: [ResultSetHeader, FieldPacket[]] = await pool.execute(query, [
       seller_id,
       title,
       description,
-      category,
-      age_range,
       sub_category,
+      age_range,
+      category,
       price,
       brand,
       location,
@@ -81,13 +70,39 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
     ]);
 
     const adId = adResult.insertId;
-    if (images && Array.isArray(images)) {
-      const imageQuery = "INSERT INTO images (ad_id, data) VALUES (?, ?)";
-      for (const image of images) {
-        const imageValues = [adId, image.data];
-        await pool.execute(imageQuery, imageValues);
+    const uploadedImageUrls: string[] = [];
+
+    for (const image of req.body.images) {
+      const base64Data = image.base64.replace(/^data:image\/[a-zA-Z]+;base64,/, "");
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+      const uniqueFileName = `${uuidv4()}-${image.name}`;
+
+      // Téléversez l'image vers Amazon S3
+      const params = {
+        Bucket: process.env.S3_BUCKET_NAME || "",
+        Key: `images/${uniqueFileName}`,
+        Body: imageBuffer,
+        ACL: 'public-read',
+      };
+
+      const uploadResult = await s3.upload(params).promise();
+
+      if (uploadResult.Location) {
+        uploadedImageUrls.push(uploadResult.Location);
+
+        // Ne créez pas une nouvelle entrée dans la table "ads" pour chaque image.
+        // Ajoutez plutôt les images à l'annonce existante.
+        const imageQuery = "INSERT INTO images (ad_id, image_url) VALUES (?, ?)";
+        await pool.execute(imageQuery, [adId, uploadResult.Location]);
       }
     }
+
+    // Mettez à jour le champ "thumbnail_url" de l'annonce avec la première image téléversée.
+    if (uploadedImageUrls.length > 0) {
+      const updateThumbnailQuery = "UPDATE ads SET thumbnail_url = ? WHERE id = ?";
+      await pool.execute(updateThumbnailQuery, [uploadedImageUrls[0], adId]);
+    }
+
     res.status(201).json({ message: "Ad created successfully." });
   } catch (error) {
     console.error(error);
@@ -98,10 +113,12 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
 adsRouter.get("/ads", async (req: Request, res: Response) => {
   try {
     const query = `
-    SELECT ads.*, images.url as thumbnail_url, users.username, users.profile_photo
+    SELECT ads.*, users.username, users.profile_photo, GROUP_CONCAT(images.image_url) AS thumbnail_urls
     FROM ads
     LEFT JOIN images ON ads.id = images.ad_id
     LEFT JOIN users ON ads.seller_id = users.user_id
+    GROUP BY ads.id;
+    
     `;
     const connection = await pool.getConnection();
     const [adsWithThumbnails] = await connection.query(query);
