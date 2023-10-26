@@ -7,6 +7,109 @@ import { v4 as uuidv4 } from 'uuid';
 
 const adsRouter = Router();
 
+AWS.config.update({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
+});
+
+const s3 = new AWS.S3();
+
+adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) => {
+  try {
+    const seller_id = req.user?.user_id;
+    const {
+      title,
+      description,
+      sub_category,
+      age_range,
+      category,
+      price,
+      brand,
+      location,
+      state,
+      status,
+    } = req.body;
+
+    if (
+      !title ||
+      !description ||
+      !sub_category ||
+      !age_range ||
+      !category ||
+      !price ||
+      !brand ||
+      !location ||
+      !state ||
+      !status
+    ) {
+      return res.status(400).json({ message: "Please provide all the required values." });
+    }
+
+    // Insérez l'annonce dans la base de données
+    const query = `
+      INSERT INTO ads (seller_id, title, description, sub_category, age_range, category, price, brand, location, state, status, thumbnail_url, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    `;
+
+    const thumbnailUrl = "image.jpeg";
+
+    const [adResult]: [ResultSetHeader, FieldPacket[]] = await pool.execute(query, [
+      seller_id,
+      title,
+      description,
+      sub_category,
+      age_range,
+      category,
+      price,
+      brand,
+      location,
+      state,
+      status,
+      thumbnailUrl,
+    ]);
+
+    const adId = adResult.insertId;
+    const uploadedImageUrls: string[] = [];
+
+    for (const image of req.body.images) {
+      const base64Data = image.base64.replace(/^data:image\/[a-zA-Z]+;base64,/, "");
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+      const uniqueFileName = `${uuidv4()}-${image.name}`;
+
+      // Téléversez l'image vers Amazon S3
+      const params = {
+        Bucket: process.env.S3_BUCKET_NAME || "",
+        Key: `images/${uniqueFileName}`,
+        Body: imageBuffer,
+        ACL: 'public-read',
+      };
+
+      const uploadResult = await s3.upload(params).promise();
+
+      if (uploadResult.Location) {
+        uploadedImageUrls.push(uploadResult.Location);
+
+        // Ne créez pas une nouvelle entrée dans la table "ads" pour chaque image.
+        // Ajoutez plutôt les images à l'annonce existante.
+        const imageQuery = "INSERT INTO images (ad_id, image_url) VALUES (?, ?)";
+        await pool.execute(imageQuery, [adId, uploadResult.Location]);
+      }
+    }
+
+    // Mettez à jour le champ "thumbnail_url" de l'annonce avec la première image téléversée.
+    if (uploadedImageUrls.length > 0) {
+      const updateThumbnailQuery = "UPDATE ads SET thumbnail_url = ? WHERE id = ?";
+      await pool.execute(updateThumbnailQuery, [uploadedImageUrls[0], adId]);
+    }
+
+    res.status(201).json({ message: "Ad created successfully." });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 adsRouter.get("/ads", async (req: Request, res: Response) => {
   try {
     const query = `
