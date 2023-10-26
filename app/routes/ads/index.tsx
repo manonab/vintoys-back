@@ -2,18 +2,12 @@ import { FieldPacket, RowDataPacket, ResultSetHeader } from "mysql2";
 import { Router, Request, Response } from "express";
 import pool from "../../database";
 import { CustomRequest, verifyToken } from "../../middleware/verifyToken";
+import { awsConfig } from "../../utils/aws";
 import * as AWS from 'aws-sdk';
-import { v4 as uuidv4 } from 'uuid';
+
+const s3 = new AWS.S3(awsConfig);
 
 const adsRouter = Router();
-
-AWS.config.update({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  region: process.env.AWS_REGION,
-});
-
-const s3 = new AWS.S3();
 
 adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) => {
   try {
@@ -29,8 +23,8 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
       location,
       state,
       status,
+      images,
     } = req.body;
-
     if (
       !title ||
       !description ||
@@ -45,22 +39,19 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
     ) {
       return res.status(400).json({ message: "Please provide all the required values." });
     }
-
-    // Insérez l'annonce dans la base de données
+    const thumbnailUrl = "url_de_l_image_par_defaut.jpg";
     const query = `
       INSERT INTO ads (seller_id, title, description, sub_category, age_range, category, price, brand, location, state, status, thumbnail_url, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `;
 
-    const thumbnailUrl = "image.jpeg";
-
     const [adResult]: [ResultSetHeader, FieldPacket[]] = await pool.execute(query, [
       seller_id,
       title,
       description,
-      sub_category,
-      age_range,
       category,
+      age_range,
+      sub_category,
       price,
       brand,
       location,
@@ -72,32 +63,34 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
     const adId = adResult.insertId;
     const uploadedImageUrls: string[] = [];
 
-    for (const image of req.body.images) {
-      const base64Data = image.base64.replace(/^data:image\/[a-zA-Z]+;base64,/, "");
-      const imageBuffer = Buffer.from(base64Data, 'base64');
-      const uniqueFileName = `${uuidv4()}-${image.name}`;
+    const uploadImages = async () => {
+      for (const image of images) {
+        const base64Data = image.base64.replace(/^data:image\/[a-zA-Z]+;base64,/, "");
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        const uniqueFileName = `${adId}-${image.name}`;
+        const params = {
+          Bucket: process.env.S3_BUCKET_NAME || "",
+          Key: `images/${uniqueFileName}`,
+          Body: imageBuffer,
+          ACL: 'public-read',
+        };
 
-      // Téléversez l'image vers Amazon S3
-      const params = {
-        Bucket: process.env.S3_BUCKET_NAME || "",
-        Key: `images/${uniqueFileName}`,
-        Body: imageBuffer,
-        ACL: 'public-read',
-      };
+        try {
+          const uploadResult = await s3.upload(params).promise();
+          if (uploadResult.Location) {
+            uploadedImageUrls.push(uploadResult.Location);
 
-      const uploadResult = await s3.upload(params).promise();
-
-      if (uploadResult.Location) {
-        uploadedImageUrls.push(uploadResult.Location);
-
-        // Ne créez pas une nouvelle entrée dans la table "ads" pour chaque image.
-        // Ajoutez plutôt les images à l'annonce existante.
-        const imageQuery = "INSERT INTO images (ad_id, image_url) VALUES (?, ?)";
-        await pool.execute(imageQuery, [adId, uploadResult.Location]);
+            const imageQuery = "INSERT INTO images (ad_id, image_url) VALUES (?, ?)";
+            await pool.execute(imageQuery, [adId, uploadResult.Location]);
+          }
+        } catch (error) {
+          console.error("Error uploading image:", error);
+        }
       }
-    }
+    };
 
-    // Mettez à jour le champ "thumbnail_url" de l'annonce avec la première image téléversée.
+    await uploadImages();
+
     if (uploadedImageUrls.length > 0) {
       const updateThumbnailQuery = "UPDATE ads SET thumbnail_url = ? WHERE id = ?";
       await pool.execute(updateThumbnailQuery, [uploadedImageUrls[0], adId]);
@@ -113,12 +106,10 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
 adsRouter.get("/ads", async (req: Request, res: Response) => {
   try {
     const query = `
-    SELECT ads.*, users.username, users.profile_photo, GROUP_CONCAT(images.image_url) AS thumbnail_urls
+    SELECT ads.*, users.username, users.profile_photo
     FROM ads
     LEFT JOIN images ON ads.id = images.ad_id
     LEFT JOIN users ON ads.seller_id = users.user_id
-    GROUP BY ads.id;
-    
     `;
     const connection = await pool.getConnection();
     const [adsWithThumbnails] = await connection.query(query);
@@ -267,7 +258,7 @@ adsRouter.get("/my_ads", verifyToken, async (req: CustomRequest, res: Response) 
     const seller_id = req.user?.user_id;
 
     const query = `
-      SELECT ads.*, images.url as thumbnail_url
+      SELECT ads.*
       FROM ads
       LEFT JOIN images ON ads.id = images.ad_id
       WHERE ads.seller_id = ?
@@ -304,7 +295,7 @@ adsRouter.get("/ads/:id", async (req: Request, res: Response) => {
   try {
     const adQuery = `SELECT ads.*, users.username, users.profile_photo FROM ads 
       LEFT JOIN users ON ads.seller_id = users.user_id
-      WHERE ads.id = ?`; // Ajout de "WHERE ads.id = ?" pour filtrer par l'ID de l'annonce
+      WHERE ads.id = ?`;
     const connection = await pool.getConnection();
     const [adResults] = (await connection.query(adQuery, [adId])) as RowDataPacket[];
     connection.release();
@@ -320,11 +311,11 @@ adsRouter.get("/ads/:id", async (req: Request, res: Response) => {
       adId,
     ])) as RowDataPacket[];
 
-    const images = imageResults.map((imageResult: RowDataPacket) => imageResult.url);
+    const images = imageResults.map((imageResult: RowDataPacket) => imageResult.image_url);
 
     ad.images = images;
-
-    res.status(200).json(ad);
+    ad.time_ago = getTimeAgo(ad.created_at),
+      res.status(200).json(ad);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });
