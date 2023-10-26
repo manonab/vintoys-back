@@ -17,8 +17,13 @@ app.listen(port, () => {
   console.log(`Server is running on ${port}`);
 });
 
-app.use(
+app.use((req, res, next) => {
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    "https://benevolent-pixie-c8f6ac.netlify.app",
+  );
   cors({
     origin: "https://benevolent-pixie-c8f6ac.netlify.app/",
   }),
-);
+    next();
+});
