@@ -23,7 +23,7 @@ app.use((req, res, next) => {
   next();
 });
 const corsOptions = {
-  origin: "https://post-ads--benevolent-pixie-c8f6ac.netlify.app",
+  origin: "https://benevolent-pixie-c8f6ac.netlify.app",
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   credentials: true,
 };
