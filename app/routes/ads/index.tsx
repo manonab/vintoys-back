@@ -258,7 +258,7 @@ adsRouter.get("/my_ads", verifyToken, async (req: CustomRequest, res: Response) 
     const seller_id = req.user?.user_id;
 
     const query = `
-      SELECT ads.*, images.url as thumbnail_url
+      SELECT ads.*
       FROM ads
       LEFT JOIN images ON ads.id = images.ad_id
       WHERE ads.seller_id = ?
