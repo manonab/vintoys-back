@@ -58,10 +58,18 @@ authRouter.get("/protected_route", verifyToken, (req: CustomRequest, res: Respon
 authRouter.post("/sign_up", async (req: Request, res: Response) => {
   try {
     const { username, email, password, street, postalCode, city } = req.body;
-
+    if (
+      !username ||
+      !email ||
+      !password ||
+      !street ||
+      !postalCode ||
+      !city
+    ) {
+      return res.status(400).json({ message: "Merci de remplir tous les champs" });
+    }
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert the new user into the database
     const [userResult]: [ResultSetHeader, FieldPacket[]] = await pool.execute(
       "INSERT INTO users (username, email, password, street, postalCode, city) VALUES (?, ?, ?, ?, ?, ?)",
       [username, email, hashedPassword, street, postalCode, city],
