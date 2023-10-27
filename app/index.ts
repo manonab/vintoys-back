@@ -15,15 +15,6 @@ app.listen(port, () => {
   console.log(`Server is running on ${port}`);
 });
 
-app.use((req, res, next) => {
-  res.setHeader(
-    "Access-Control-Allow-Origin",
-    "https://benevolent-pixie-c8f6ac.netlify.app",
-  );
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  next();
-});
 
 app.use(cors());
 app.use(bodyParser.json({ limit: "100mb" }));
