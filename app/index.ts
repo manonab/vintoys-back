@@ -7,8 +7,6 @@ import userRouter from "./routes/users";
 const app = express();
 const port = process.env.PORT || 3001;
 app.use(bodyParser.json());
-app.use(cors());
-app.use(express.urlencoded({ extended: true }));
 app.use(adsRouter);
 app.use(authRouter);
 app.use(userRouter);
@@ -22,8 +20,14 @@ app.use((req, res, next) => {
     "Access-Control-Allow-Origin",
     "https://benevolent-pixie-c8f6ac.netlify.app",
   );
-  cors({
-    origin: "https://benevolent-pixie-c8f6ac.netlify.app/",
-  }),
-    next();
+  next();
 });
+const corsOptions = {
+  origin: "https://post-ads--benevolent-pixie-c8f6ac.netlify.app",
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  credentials: true,
+};
+app.use(cors(corsOptions));
+app.use(bodyParser.json({ limit: "100mb" }));
+app.use(bodyParser.urlencoded({ extended: true, limit: "100mb" }));
+

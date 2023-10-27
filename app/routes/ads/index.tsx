@@ -106,7 +106,7 @@ adsRouter.post("/ads", verifyToken, async (req: CustomRequest, res: Response) =>
 adsRouter.get("/ads", async (req: Request, res: Response) => {
   try {
     const query = `
-    SELECT ads.*, images.url as thumbnail_url, users.username, users.profile_photo
+    SELECT ads.*, users.username, users.profile_photo
     FROM ads
     LEFT JOIN images ON ads.id = images.ad_id
     LEFT JOIN users ON ads.seller_id = users.user_id
