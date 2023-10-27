@@ -20,14 +20,12 @@ app.use((req, res, next) => {
     "Access-Control-Allow-Origin",
     "https://benevolent-pixie-c8f6ac.netlify.app",
   );
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   next();
 });
-const corsOptions = {
-  origin: "https://benevolent-pixie-c8f6ac.netlify.app",
-  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-  credentials: true,
-};
-app.use(cors(corsOptions));
+
+app.use(cors());
 app.use(bodyParser.json({ limit: "100mb" }));
 app.use(bodyParser.urlencoded({ extended: true, limit: "100mb" }));
 
