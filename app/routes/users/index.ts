@@ -26,13 +26,12 @@ userRouter.get("/me", verifyToken, async (req: CustomRequest, res: Response) => 
        res.status(500).json({ message: "Internal server error" });
      }
 });
-userRouter.get("/users", verifyToken, async (req: CustomRequest, res: Response) => {
 
+userRouter.get("/users", verifyToken, async (req: CustomRequest, res: Response) => {
   try {
-    const [result]: [RowDataPacket[], FieldPacket[]] = await pool.execute(
-      "SELECT * FROM users",
-    );
-      res.status(200).json(result);
+    const [result]: [RowDataPacket[], FieldPacket[]] =
+      await pool.execute("SELECT * FROM users");
+    res.status(200).json(result);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });
