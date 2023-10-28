@@ -315,7 +315,8 @@ adsRouter.get("/ads/:id", async (req: Request, res: Response) => {
 
     ad.images = images;
     ad.time_ago = getTimeAgo(ad.created_at),
-      res.status(200).json(ad);
+     
+    res.status(200).json(ad);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });
