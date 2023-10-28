@@ -295,7 +295,7 @@ adsRouter.get("/ads/:id", async (req: Request, res: Response) => {
   try {
     const adQuery = `SELECT ads.*, users.username, users.profile_photo FROM ads 
       LEFT JOIN users ON ads.seller_id = users.user_id
-      WHERE ads.id = ?`; // Ajout de "WHERE ads.id = ?" pour filtrer par l'ID de l'annonce
+      WHERE ads.id = ?`;
     const connection = await pool.getConnection();
     const [adResults] = (await connection.query(adQuery, [adId])) as RowDataPacket[];
     connection.release();
@@ -311,10 +311,10 @@ adsRouter.get("/ads/:id", async (req: Request, res: Response) => {
       adId,
     ])) as RowDataPacket[];
 
-    const images = imageResults.map((imageResult: RowDataPacket) => imageResult.url);
+    const images = imageResults.map((imageResult: RowDataPacket) => imageResult.image_url);
 
     ad.images = images;
-
+    ad.time_ago = getTimeAgo(ad.created_at),
     res.status(200).json(ad);
   } catch (error) {
     console.error(error);
