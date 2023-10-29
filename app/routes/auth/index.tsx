@@ -20,19 +20,30 @@ authRouter.post("/signin", async (req: Request, res: Response) => {
       const user = result[0];
       const passwordMatch = await bcrypt.compare(password, user.password);
       if (passwordMatch) {
-        const token = jwt.sign(
+        const accessToken = jwt.sign(
           { user_id: user.user_id, user_name: user.username },
-          "default_secret",
+          `${process.env.ACCESS_TOKEN_SECRET}`,
           {
             expiresIn: "1h",
           },
         );
-        res.cookie("user_token", token, {
+
+        const refreshToken = jwt.sign(
+          { user_id: user.user_id },
+          `${process.env.REFRESH_TOKEN_SECRET}`,
+          {
+            expiresIn: "7d",
+          }
+        );
+
+        res.cookie("user_token", accessToken, {
           httpOnly: true,
           expires: new Date(Date.now() + 3600000),
         });
+
         res.json({
-          user_token: token,
+          user_token: accessToken,
+          refreshToken: refreshToken,
           message: "Sign in successful",
         });
       } else {
@@ -83,6 +94,29 @@ authRouter.post("/sign_up", async (req: Request, res: Response) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+authRouter.post("/refresh", async (req: Request, res: Response) => {
+  try {
+    const refreshToken = req.header("Authorization");
+
+    const [result]: [RowDataPacket[], FieldPacket[]] = await pool.execute(
+      "SELECT * FROM users WHERE refresh_token = ?",
+      [refreshToken],
+    );
+
+    if (result.length === 1) {
+      const user_id = result[0].user_id;
+      const newAccessToken = jwt.sign({ user_id: user_id }, `${process.env.ACCESS_TOKEN_SECRET}`, { expiresIn: "1h" });
+      res.json({ accessToken: newAccessToken });
+    } else {
+      res.status(401).json({ message: "Invalid refresh token" });
+    }
+
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ message: "Internal server error" })
   }
 });
 
