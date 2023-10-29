@@ -8,7 +8,7 @@ require("dotenv").config();
 
 const authRouter: Router = express.Router();
 
-authRouter.post("/signin", async (req: Request, res: Response) => {
+authRouter.post("/signin", async (req, res) => {
   try {
     const { email, password } = req.body;
     const [result]: [RowDataPacket[], FieldPacket[]] = await pool.execute(
@@ -35,6 +35,10 @@ authRouter.post("/signin", async (req: Request, res: Response) => {
             expiresIn: "7d",
           }
         );
+
+        const insertRefreshTokenQuery = "UPDATE users SET refresh_token = ? WHERE user_id = ?";
+        const user_id = user.user_id;
+        await pool.execute(insertRefreshTokenQuery, [refreshToken, user_id]);
 
         res.cookie("user_token", accessToken, {
           httpOnly: true,
@@ -98,26 +102,40 @@ authRouter.post("/sign_up", async (req: Request, res: Response) => {
 });
 
 authRouter.post("/refresh", async (req: Request, res: Response) => {
-  try {
-    const refreshToken = req.header("Authorization");
+  const { user_id } = req.body;
+  console.log(req)
+  if (!user_id) {
+    return res.status(400).json({ message: "User ID missing." });
+  }
 
+  try {
     const [result]: [RowDataPacket[], FieldPacket[]] = await pool.execute(
-      "SELECT * FROM users WHERE refresh_token = ?",
-      [refreshToken],
+      "SELECT * FROM users WHERE user_id = ?",
+      [user_id],
     );
 
     if (result.length === 1) {
-      const user_id = result[0].user_id;
-      const newAccessToken = jwt.sign({ user_id: user_id }, `${process.env.ACCESS_TOKEN_SECRET}`, { expiresIn: "1h" });
-      res.json({ accessToken: newAccessToken });
+      const user = result[0];
+      if (user.refresh_token) {
+        const accessToken = jwt.sign(
+          { user_id: user.user_id, user_name: user.username },
+          `${process.env.ACCESS_TOKEN_SECRET}`,
+          {
+            expiresIn: "1h",
+          }
+        );
+        res.json({ accessToken: accessToken });
+      } else {
+        res.status(401).json({ message: "Invalid refresh token" });
+      }
     } else {
-      res.status(401).json({ message: "Invalid refresh token" });
+      res.status(401).json({ message: "Invalid user ID" });
     }
-
   } catch (error) {
-    console.error(error)
-    res.status(500).json({ message: "Internal server error" })
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
   }
 });
+
 
 export default authRouter;

@@ -5,7 +5,7 @@ export interface CustomRequest extends Request {
   user?: { user_id: number };
 }
 
-const secretKey = "default_secret";
+const secretKey = `${process.env.ACCESS_TOKEN_SECRET}`;
 
 export const verifyToken = (req: CustomRequest, res: Response, next: NextFunction) => {
   const token = req.header("Authorization");
