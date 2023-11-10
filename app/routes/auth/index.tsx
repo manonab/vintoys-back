@@ -8,6 +8,44 @@ require("dotenv").config();
 
 const authRouter: Router = express.Router();
 
+authRouter.post("/refresh", async (req, res) => {
+  const { user_id } = req.body;
+  if (!user_id) {
+    return res.status(400).json({ message: "User ID missing." });
+  }
+
+  try {
+    const [result]: [RowDataPacket[], FieldPacket[]] = await pool.execute(
+      "SELECT * FROM users WHERE user_id = ?",
+      [user_id],
+    );
+
+    if (result.length === 1) {
+      const user = result[0];
+      if (user.refresh_token) {
+        const accessToken = jwt.sign(
+          { user_id: user.user_id, user_name: user.username },
+          `${process.env.ACCESS_TOKEN_SECRET}`,
+          {
+            expiresIn: "1h",
+          }
+        );
+
+        res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+        res.setHeader('Access-Control-Allow-Headers', 'Authorization');
+        res.json({ accessToken: accessToken });
+      } else {
+        res.status(401).json({ message: "Invalid refresh token" });
+      }
+    } else {
+      res.status(401).json({ message: "Invalid user ID" });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 authRouter.post("/signin", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -83,6 +121,13 @@ authRouter.post("/sign_up", async (req: Request, res: Response) => {
     ) {
       return res.status(400).json({ message: "Merci de remplir tous les champs" });
     }
+    const [result]: [RowDataPacket[], FieldPacket[]] = await pool.execute(
+      "SELECT * FROM users WHERE email = ?",
+      [email],
+    );
+    if (result.length > 0) {
+      return res.status(409).json({ message: "Cette adresse e-mail est déjà utilisée." });
+    }
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const [userResult]: [ResultSetHeader, FieldPacket[]] = await pool.execute(
@@ -101,41 +146,6 @@ authRouter.post("/sign_up", async (req: Request, res: Response) => {
   }
 });
 
-authRouter.post("/refresh", async (req: Request, res: Response) => {
-  const { user_id } = req.body;
-  console.log(req)
-  if (!user_id) {
-    return res.status(400).json({ message: "User ID missing." });
-  }
-
-  try {
-    const [result]: [RowDataPacket[], FieldPacket[]] = await pool.execute(
-      "SELECT * FROM users WHERE user_id = ?",
-      [user_id],
-    );
-
-    if (result.length === 1) {
-      const user = result[0];
-      if (user.refresh_token) {
-        const accessToken = jwt.sign(
-          { user_id: user.user_id, user_name: user.username },
-          `${process.env.ACCESS_TOKEN_SECRET}`,
-          {
-            expiresIn: "1h",
-          }
-        );
-        res.json({ accessToken: accessToken });
-      } else {
-        res.status(401).json({ message: "Invalid refresh token" });
-      }
-    } else {
-      res.status(401).json({ message: "Invalid user ID" });
-    }
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
 
 
 export default authRouter;
